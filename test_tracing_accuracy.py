@@ -33,7 +33,11 @@ def estimate_trace_centers(trace_center_positions, image_data, halfwindow=5):
     min_y, max_y = np.min(trace_center_positions) - halfwindow - 2, np.max(trace_center_positions) + halfwindow + 2
     min_row, max_row = max(int(min_y), 0), min(int(max_y), image_data['counts'].shape[0])
     weights = mask[min_row:max_row] * image_data['counts'][min_row:max_row]
+    trace_positions, standard_deviations = weighted_avg_and_std(values=image_data['y_coords'][min_row:max_row],
+                                                                weights=weights,
+                                                                axis=0)
     flux_weighted_trace_position = np.sum(image_data['y_coords'][min_row:max_row] * weights, axis=0) / np.sum(weights, axis=0)
+    print(flux_weighted_trace_position - trace_positions)
     return flux_weighted_trace_position
 
 
@@ -51,13 +55,24 @@ def close_to_trace_mask(trace_center_positions, image_data, halfwindow=5):
     return mask
 
 
-
 def mask_for_pixels_close_to_trace(trace_center_positions, image_y_coordinate_array, halfwindow=5):
     mask = np.zeros_like(image_y_coordinate_array)
     for j in range(image_y_coordinate_array.shape[1]):
         mask[:, j] = np.isclose(image_y_coordinate_array[:, j],
                                 trace_center_positions[j], atol=halfwindow)
     return mask
+
+
+def weighted_avg_and_std(values, weights, axis=None):
+    """
+    Return the weighted average and standard deviation.
+
+    values, weights -- Numpy ndarrays with the same shape.
+    """
+    average = np.average(values, weights=weights, axis=axis)
+    # Fast and numerically precise:
+    variance = np.average((values-average)**2, weights=weights, axis=axis)
+    return (average, np.sqrt(variance))
 
 
 if __name__ == "__main__":
