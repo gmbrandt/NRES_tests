@@ -3,6 +3,7 @@
 import numpy as np
 from astropy.io import fits
 import matplotlib.pyplot as plt
+import sep
 import math
 
 """
@@ -14,6 +15,7 @@ the position, weighted by flux.
 def banzai_trace_center_residuals(image_hdu, trace_hdu, halfwindow=5):
     trace_centers = trace_hdu['TRACE'].data['centers']
     image_data = {'counts': image_hdu[1].data.astype(np.float32)}
+    image_data['counts'] -= sep.Background(image_data['counts']).back()
     image_data['x_coords'], image_data['y_coords'] = np.meshgrid(np.meshgrid(np.arange(image_data['counts'].shape[1])),
                                                                  np.arange(image_data['counts'].shape[0]))
     trace_center_estimates = []
@@ -23,12 +25,13 @@ def banzai_trace_center_residuals(image_hdu, trace_hdu, halfwindow=5):
         trace_center_estimates.append(flux_weighted_centers)
         trace_center_estimate_errors.append(errors)
 
-    trace_center_estimates = np.array(trace_center_estimates)
-    trace_center_estimate_errors = np.array(trace_center_estimate_errors)
+    #trace_center_estimates = np.array(trace_center_estimates)
+    #trace_center_estimate_errors = np.array(trace_center_estimate_errors)
     #plt.figure()
     #plt.imshow(image_data['counts'])
-    #plt.plot(trace_centers[67], 'b')
-    #plt.plot(trace_center_estimates[67], 'r--')
+    ##plt.plot(trace_centers[67], 'b')
+    #for order in range(trace_centers.shape[0]):
+    #    plt.plot(trace_center_estimates[order], 'r')
     #plt.show()
     residuals = trace_centers - trace_center_estimates
     return residuals, trace_center_estimate_errors
@@ -43,6 +46,8 @@ def estimate_trace_centers(trace_center_positions, image_data, halfwindow=5):
     xminusxavg = image_data['y_coords'][min_row:max_row] - trace_positions
     standard_deviations = np.sqrt(np.sum(weights * xminusxavg ** 2, axis=0) /
                                   np.sum(weights**2, axis=0))
+    trace_positions[weights.sum(axis=0) < 1000] = np.nan
+    standard_deviations[weights.sum(axis=0) < 1000] = np.nan
     return trace_positions, standard_deviations
 
 
@@ -75,17 +80,16 @@ if __name__ == "__main__":
     raw_image_hdu = fits.open('/home/mbrandt21/Documents/nres_archive_data/'
                               'tlv/nres04/20190208/processed/tlvnrs04'
                               '-fa18-20190208-lampflat-bin1x1-110.fits.fz')
-    residuals, errors = banzai_trace_center_residuals(raw_image_hdu, traces_hdu, halfwindow=5)
+    residuals, errors = banzai_trace_center_residuals(raw_image_hdu, traces_hdu, halfwindow=7)
     x = np.arange(residuals.shape[1])
     i = 0
-    for single_order_residuals, so_errors in zip(residuals, errors):
-        fig, axarr = plt.subplots(2)
-        axarr[0].errorbar(x, single_order_residuals, yerr=so_errors)
-        axarr[1].errorbar(x, single_order_residuals, yerr=so_errors)
-        axarr[1].set_xlim((1000, 3000))
-        for ax in axarr:
-            ax.set_xlabel('Pixel')
-            ax.axhline(y=0, color='k')
-        axarr[0].set_title('BanzaiNRES Trace Center - Flux weighted Mean Center \n Trace ID: {0}'.format(i))
-        i+=1
+    min_order = 100
+    max_order = 130
+    for single_order_residuals, so_errors in zip(residuals[min_order:max_order], errors[min_order:max_order]):
+        fig, ax = plt.subplots()
+        ax.errorbar(x, single_order_residuals, yerr=so_errors)
+        ax.set_xlabel('Pixel')
+        ax.axhline(y=0, color='k')
+        ax.set_title('BanzaiNRES Trace Center - Flux weighted Mean Center \n Trace ID: {0}'.format(i + min_order))
+        i += 1
         plt.show()
