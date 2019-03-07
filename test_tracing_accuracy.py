@@ -3,6 +3,7 @@
 import numpy as np
 from astropy.io import fits
 import matplotlib.pyplot as plt
+import math
 
 """
 Script which compares the outputs of tracing to the actual centroids of the traces: The mean of
@@ -16,16 +17,21 @@ def banzai_trace_center_residuals(image_hdu, trace_hdu, halfwindow=5):
     image_data['x_coords'], image_data['y_coords'] = np.meshgrid(np.meshgrid(np.arange(image_data['counts'].shape[1])),
                                                                  np.arange(image_data['counts'].shape[0]))
     trace_center_estimates = []
+    trace_center_estimate_errors = []
     for single_order_centers in trace_centers:
-        trace_center_estimates.append(estimate_trace_centers(single_order_centers, image_data, halfwindow=halfwindow))
+        flux_weighted_centers, errors = estimate_trace_centers(single_order_centers, image_data, halfwindow=halfwindow)
+        trace_center_estimates.append(flux_weighted_centers)
+        trace_center_estimate_errors.append(errors)
+
     trace_center_estimates = np.array(trace_center_estimates)
-    plt.figure()
-    plt.imshow(image_data['counts'])
-    plt.plot(trace_centers[0], 'b')
-    plt.plot(trace_center_estimates[0], 'r--')
-    plt.show()
+    trace_center_estimate_errors = np.array(trace_center_estimate_errors)
+    #plt.figure()
+    #plt.imshow(image_data['counts'])
+    #plt.plot(trace_centers[67], 'b')
+    #plt.plot(trace_center_estimates[67], 'r--')
+    #plt.show()
     residuals = trace_centers - trace_center_estimates
-    return residuals
+    return residuals, trace_center_estimate_errors
 
 
 def estimate_trace_centers(trace_center_positions, image_data, halfwindow=5):
@@ -33,12 +39,11 @@ def estimate_trace_centers(trace_center_positions, image_data, halfwindow=5):
     min_y, max_y = np.min(trace_center_positions) - halfwindow - 2, np.max(trace_center_positions) + halfwindow + 2
     min_row, max_row = max(int(min_y), 0), min(int(max_y), image_data['counts'].shape[0])
     weights = mask[min_row:max_row] * image_data['counts'][min_row:max_row]
-    trace_positions, standard_deviations = weighted_avg_and_std(values=image_data['y_coords'][min_row:max_row],
-                                                                weights=weights,
-                                                                axis=0)
-    flux_weighted_trace_position = np.sum(image_data['y_coords'][min_row:max_row] * weights, axis=0) / np.sum(weights, axis=0)
-    print(flux_weighted_trace_position - trace_positions)
-    return flux_weighted_trace_position
+    trace_positions = np.average(image_data['y_coords'][min_row:max_row], weights=weights, axis=0)
+    xminusxavg = image_data['y_coords'][min_row:max_row] - trace_positions
+    standard_deviations = np.sqrt(np.sum(weights * xminusxavg ** 2, axis=0) /
+                                  np.sum(weights**2, axis=0))
+    return trace_positions, standard_deviations
 
 
 def close_to_trace_mask(trace_center_positions, image_data, halfwindow=5):
@@ -63,18 +68,6 @@ def mask_for_pixels_close_to_trace(trace_center_positions, image_y_coordinate_ar
     return mask
 
 
-def weighted_avg_and_std(values, weights, axis=None):
-    """
-    Return the weighted average and standard deviation.
-
-    values, weights -- Numpy ndarrays with the same shape.
-    """
-    average = np.average(values, weights=weights, axis=axis)
-    # Fast and numerically precise:
-    variance = np.average((values-average)**2, weights=weights, axis=axis)
-    return (average, np.sqrt(variance))
-
-
 if __name__ == "__main__":
     traces_hdu = fits.open('/home/mbrandt21/Documents/nres_archive_data/'
                            'tlv/nres04/20190208/processed/tlvnrs04'
@@ -82,4 +75,17 @@ if __name__ == "__main__":
     raw_image_hdu = fits.open('/home/mbrandt21/Documents/nres_archive_data/'
                               'tlv/nres04/20190208/processed/tlvnrs04'
                               '-fa18-20190208-lampflat-bin1x1-110.fits.fz')
-    residuals = banzai_trace_center_residuals(raw_image_hdu, traces_hdu, halfwindow=5)
+    residuals, errors = banzai_trace_center_residuals(raw_image_hdu, traces_hdu, halfwindow=5)
+    x = np.arange(residuals.shape[1])
+    i = 0
+    for single_order_residuals, so_errors in zip(residuals, errors):
+        fig, axarr = plt.subplots(2)
+        axarr[0].errorbar(x, single_order_residuals, yerr=so_errors)
+        axarr[1].errorbar(x, single_order_residuals, yerr=so_errors)
+        axarr[1].set_xlim((1000, 3000))
+        for ax in axarr:
+            ax.set_xlabel('Pixel')
+            ax.axhline(y=0, color='k')
+        axarr[0].set_title('BanzaiNRES Trace Center - Flux weighted Mean Center \n Trace ID: {0}'.format(i))
+        i+=1
+        plt.show()
