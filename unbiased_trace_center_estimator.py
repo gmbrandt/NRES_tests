@@ -69,15 +69,16 @@ def mask_for_pixels_close_to_trace(trace_center_positions, image_y_coordinate_ar
 
 if __name__ == "__main__":
     reanalyze_data = True
-    plot_data = False
+    plot_data = True
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--site',
                         choices=['tlv', 'elp', 'lsc', 'cpt'],
                         help='NRES site name, e.g. tlv')
+    parser.add_argument('--output-base-path')
     args = parser.parse_args()
     site = args.site
-    output_dir = '/tmp/trace_flux_centering_20190325/{0}/'.format(site)
+    output_dir = os.path.join(args.output_base_path, '{0}/'.format(site))
     instrument = {'lsc': 'nres01', 'elp': 'nres02', 'cpt': 'nres03', 'tlv': 'nres04'}[site]
     raw_data_basepath = '/home/mbrandt21/Documents/nres_archive_data/{0}/{1}'.format(site, instrument)
 
