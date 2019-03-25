@@ -116,6 +116,18 @@ if __name__ == "__main__":
 
     if args.plot:
         for master_trace in all_master_traces:
+
+            master_dark, master_bias = '/tmp/none1111.fits', '/tmp/none1111.fits'
+            if '-110' in master_trace:
+                master_dark = (master_trace.replace('trace', 'dark')).replace('-110', '')
+                master_bias = (master_trace.replace('trace', 'bias')).replace('-110', '')
+            if '-011' in master_trace:
+                master_dark = (master_trace.replace('trace', 'dark')).replace('-011', '')
+                master_bias = (master_trace.replace('trace', 'bias')).replace('-011', '')
+            if not os.path.exists(master_dark) or not os.path.exists(master_bias):
+                # short circuit if master bias or master darks were not taken.
+                continue
+
             traces_hdu = fits.open(master_trace)
             trace_centers = traces_hdu['TRACE'].data['centers']
             unbiased_path = os.path.join(output_dir,
