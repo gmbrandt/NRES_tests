@@ -4,7 +4,9 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 import glob
+import datetime
 import matplotlib.pyplot as plt
+import matplotlib.dates as pltdates
 import sep
 import os
 import argparse
@@ -77,13 +79,15 @@ if __name__ == "__main__":
                         action="store_true")
     parser.add_argument("--calculate", help="calculate flux weighted mean of trace centers",
                         action="store_true")
+    parser.add_argument('--archive-base-path',
+                        help='archive data path, e.g. /archive/engineering/')
     args = parser.parse_args()
     site = args.site
     output_dir = os.path.join(args.output_base_path, '{0}/'.format(site))
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     instrument = {'lsc': 'nres01', 'elp': 'nres02', 'cpt': 'nres03', 'tlv': 'nres04'}[site]
-    raw_data_basepath = '/home/mbrandt21/Documents/nres_archive_data/{0}/{1}'.format(site, instrument)
+    raw_data_basepath = os.path.join(args.archive_base_path, '{0}/{1}'.format(site, instrument))
 
     all_master_traces = glob.glob(os.path.join(raw_data_basepath, '**/processed/*trace*'))
 
@@ -115,38 +119,50 @@ if __name__ == "__main__":
             hdu_list.writeto(output_path, output_verify='exception', overwrite=True)
 
     if args.plot:
+        avg_locations = {}
+        avg_locations_err = {}
+        times = []
+        low, high = 1500, 3000
+        orders = np.arange(23, 26)
         for master_trace in all_master_traces:
+            if '110' in master_trace:  # plotting only 110 trace files.
+                traces_hdu = fits.open(master_trace)
+                trace_centers = traces_hdu['TRACE'].data['centers']
+                unbiased_path = os.path.join(output_dir,
+                                             os.path.basename(master_trace).replace('trace', 'unbiased-trace'))
+                if not os.path.exists(unbiased_path):
+                    continue
+                unbiased_centers_hdu = fits.open(unbiased_path)
+                unbiased_centers = unbiased_centers_hdu['TRACE'].data['centers']
+                residuals = unbiased_centers - trace_centers
+                errors = unbiased_centers_hdu['TRACE'].data['errors']
 
-            master_dark, master_bias = '/tmp/none1111.fits', '/tmp/none1111.fits'
-            if '-110' in master_trace:
-                master_dark = (master_trace.replace('trace', 'dark')).replace('-110', '')
-                master_bias = (master_trace.replace('trace', 'bias')).replace('-110', '')
-            if '-011' in master_trace:
-                master_dark = (master_trace.replace('trace', 'dark')).replace('-011', '')
-                master_bias = (master_trace.replace('trace', 'bias')).replace('-011', '')
-            if not os.path.exists(master_dark) or not os.path.exists(master_bias):
-                # short circuit if master bias or master darks were not taken.
-                continue
+                for order in orders:
+                    if avg_locations.get(str(order)) is None:
+                        avg_locations[str(order)] = []
+                        avg_locations_err[str(order)] = []
+                    avg_locations[str(order)].append(np.nanmean(unbiased_centers[order][low:high]))
+                    included_points = np.count_nonzero(~np.isnan(errors[order][low:high]))
+                    avg_locations_err[str(order)].append(np.sqrt(np.nansum(errors[order][low:high]**2)/included_points))
 
-            traces_hdu = fits.open(master_trace)
-            trace_centers = traces_hdu['TRACE'].data['centers']
-            unbiased_path = os.path.join(output_dir,
-                                         os.path.basename(master_trace).replace('trace', 'unbiased-trace'))
-            unbiased_centers_hdu = fits.open(unbiased_path)
-            residuals = unbiased_centers_hdu['TRACE'].data['centers'] - trace_centers
-            errors = unbiased_centers_hdu['TRACE'].data['errors']
-
-            x = np.arange(residuals.shape[1])
-            i = 0
-            min_order = 0
-            max_order = np.nan
-            max_order = min(residuals.shape[0] - 1, max_order)
-            for single_order_residuals, so_errors in zip(residuals[min_order:max_order], errors[min_order:max_order]):
-                fig, ax = plt.subplots()
-                ax.errorbar(x, single_order_residuals, yerr=so_errors)
-                ax.set_xlabel('Pixel')
-                ax.axhline(y=0, color='k')
-                ax.set_title('BanzaiNRES Trace Center - Flux weighted Mean Center \n Trace ID: {0}'.format(i + min_order))
-                i += 1
-                plt.show()
-
+                times.append(datetime.datetime.strptime(traces_hdu[1].header['DATE-OBS'].split('.')[0],
+                                                        '%Y-%m-%dT%H:%M:%S'))
+        plt.figure()
+        for order in orders:
+            plt.errorbar(times, avg_locations[str(order)], yerr=avg_locations_err[str(order)], marker='o', ls='none')
+        plt.show()
+"""
+x = np.arange(residuals.shape[1])
+i = 0
+min_order = 0
+max_order = np.nan
+max_order = min(residuals.shape[0] - 1, max_order)
+for single_order_residuals, so_errors in zip(residuals[min_order:max_order], errors[min_order:max_order]):
+    fig, ax = plt.subplots()
+    ax.errorbar(x, single_order_residuals, yerr=so_errors)
+    ax.set_xlabel('Pixel')
+    ax.axhline(y=0, color='k')
+    ax.set_title('BanzaiNRES Trace Center - Flux weighted Mean Center \n Trace ID: {0}'.format(i + min_order))
+    i += 1
+    plt.show()
+"""
