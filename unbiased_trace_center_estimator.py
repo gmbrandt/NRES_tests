@@ -79,6 +79,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     site = args.site
     output_dir = os.path.join(args.output_base_path, '{0}/'.format(site))
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     instrument = {'lsc': 'nres01', 'elp': 'nres02', 'cpt': 'nres03', 'tlv': 'nres04'}[site]
     raw_data_basepath = '/home/mbrandt21/Documents/nres_archive_data/{0}/{1}'.format(site, instrument)
 
