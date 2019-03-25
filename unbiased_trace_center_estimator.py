@@ -68,14 +68,15 @@ def mask_for_pixels_close_to_trace(trace_center_positions, image_y_coordinate_ar
 
 
 if __name__ == "__main__":
-    reanalyze_data = True
-    plot_data = True
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--site',
                         choices=['tlv', 'elp', 'lsc', 'cpt'],
                         help='NRES site name, e.g. tlv')
     parser.add_argument('--output-base-path')
+    parser.add_argument("--plot", help="plot trace comparison data",
+                        action="store_true")
+    parser.add_argument("--calculate", help="calculate flux weighted mean of trace centers",
+                        action="store_true")
     args = parser.parse_args()
     site = args.site
     output_dir = os.path.join(args.output_base_path, '{0}/'.format(site))
@@ -86,7 +87,7 @@ if __name__ == "__main__":
 
     all_master_traces = glob.glob(os.path.join(raw_data_basepath, '**/processed/*trace*'))
 
-    if reanalyze_data:
+    if args.calculate:
         for master_trace in all_master_traces:
 
             master_dark, master_bias = '/tmp/none1111.fits', '/tmp/none1111.fits'
@@ -113,7 +114,7 @@ if __name__ == "__main__":
             hdu_list = fits.HDUList([fits.PrimaryHDU(), hdu])
             hdu_list.writeto(output_path, output_verify='exception', overwrite=True)
 
-    if plot_data:
+    if args.plot:
         for master_trace in all_master_traces:
             traces_hdu = fits.open(master_trace)
             trace_centers = traces_hdu['TRACE'].data['centers']

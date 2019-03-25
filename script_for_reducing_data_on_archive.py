@@ -1,8 +1,3 @@
-docker run --rm --name "banzai_nres_$1_nightly_`date +%F`" -l gtn.lco.logstash='yes' -v /archive:/archive --entrypoint="
-banzai_nres_reduce_night" docker.lco.global/banzai-nres:0.3.0-403-gc432cb9 --site $1 --instrument-name $2 --camera $3 --
-fpack --ignore-schedulability --db-address=postgresql://pipeline:pipeline@chanunpa.lco.gtn:5435/pipeline &>> "/home/root
-/logs/banzai-nres-$1-`date +%F`.log"
-
 import os
 import datetime
 import time
