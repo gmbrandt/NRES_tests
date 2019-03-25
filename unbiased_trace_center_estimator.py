@@ -149,7 +149,10 @@ if __name__ == "__main__":
                                                         '%Y-%m-%dT%H:%M:%S'))
         plt.figure()
         for order in orders:
-            plt.errorbar(times, avg_locations[str(order)], yerr=avg_locations_err[str(order)], marker='o', ls='none')
+            plt.errorbar(times, avg_locations[str(order)] - np.mean(avg_locations[str(order)]),
+                         yerr=avg_locations_err[str(order)], marker=',', ls='none')
+        plt.ylabel('Order position - average')
+        plt.xticks(rotation='vertical')
         plt.show()
 """
 x = np.arange(residuals.shape[1])
