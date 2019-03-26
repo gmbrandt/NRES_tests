@@ -106,7 +106,8 @@ if __name__ == "__main__":
     raw_data_basepath = os.path.join(args.archive_base_path, '{0}/{1}'.format(site, instrument))
 
     all_master_traces = glob.glob(os.path.join(raw_data_basepath, '**/processed/*trace*'))
-
+    if save_figures and not os.path.exists(os.path.join(output_dir, 'figures')):
+        os.makedirs(os.path.join(output_dir, 'figures'))
     if args.calculate:
         for master_trace in all_master_traces:
 
@@ -201,7 +202,8 @@ if __name__ == "__main__":
         #plt.locator_params(axis='x', nbins=10)
         plt.tight_layout()
         if save_figures:
-            plt.savefig(os.path.join(output_dir, 'figure_flux_centers.pdf'), bbox_inches='tight')
+            plt.savefig(os.path.join(output_dir, 'figures', 'figure_flux_centers{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
+                        bbox_inches='tight')
 
         """
         figure showing trace estimates from banzai-nres following the real positions closely.
@@ -230,7 +232,8 @@ if __name__ == "__main__":
         #plt.locator_params(axis='x', nbins=10)
         plt.tight_layout()
         if save_figures:
-            plt.savefig(os.path.join(output_dir, 'figure_trace_accuracy.pdf'), bbox_inches='tight')
+            plt.savefig(os.path.join(output_dir, 'figures', 'figure_trace_accuracy{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
+                        bbox_inches='tight')
 
         """
         figure showing trace estimates from banzai-nres following the real positions closely.
@@ -239,9 +242,9 @@ if __name__ == "__main__":
         tidx1, tidx2 = 0, 20
         # residuals is a list of 2d arrays of residuals
         x = np.arange(residuals_over_time[tidx1].shape[1])
-        ax.errorbar(x, residuals_over_time[tidx1][30], yerr=errors_over_time[tidx1][30],
+        ax.errorbar(x, residuals_over_time[tidx1][orders[0]], yerr=errors_over_time[tidx1][orders[0]],
                     label=datetime.datetime.strftime(times[tidx1], '%Y%m%d'))
-        ax.errorbar(x, residuals_over_time[tidx2][30], yerr=errors_over_time[tidx2][30],
+        ax.errorbar(x, residuals_over_time[tidx2][orders[0]], yerr=errors_over_time[tidx2][orders[0]],
                     label=datetime.datetime.strftime(times[tidx2], '%Y%m%d'))
         ax.set_xlabel('Pixel')
         ax.axhline(y=0, color='k')
@@ -255,7 +258,8 @@ if __name__ == "__main__":
         plt.tight_layout()
 
         if save_figures:
-            plt.savefig(os.path.join(output_dir, 'figure_trace_residuals.pdf'), bbox_inches='tight')
+            plt.savefig(os.path.join(output_dir, 'figures', 'figure_trace_residuals{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
+                        bbox_inches='tight')
         if not save_figures:
             plt.show()
 """
