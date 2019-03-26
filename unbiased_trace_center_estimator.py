@@ -69,6 +69,11 @@ def mask_for_pixels_close_to_trace(trace_center_positions, image_y_coordinate_ar
     return mask
 
 
+def get_index_of_reference_order(reference_xyi, trace_centers):
+    trace_y_values_at_refx = trace_centers[:, reference_xyi[0]]
+    return np.argmin(np.abs(trace_y_values_at_refx - reference_xyi[1]))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--site',
@@ -81,6 +86,8 @@ if __name__ == "__main__":
                         action="store_true")
     parser.add_argument('--archive-base-path',
                         help='archive data path, e.g. /archive/engineering/')
+    parser.add_argument('--orders-to-plot',
+                        help='orders to plot e.g. 23,24,25')
     args = parser.parse_args()
     site = args.site
     output_dir = os.path.join(args.output_base_path, '{0}/'.format(site))
@@ -121,9 +128,11 @@ if __name__ == "__main__":
     if args.plot:
         avg_locations = {}
         avg_locations_err = {}
+        true_order_delta = []
         times = []
+        order_ref_xyi = (2087, 4024, 134)
         low, high = 1000, 3000
-        orders = np.arange(23, 26)
+        orders = np.array(args.orders_to_plot.split(',')).astype(np.int)
         for master_trace in all_master_traces:
             if '110' in master_trace:  # plotting only 110 trace files.
                 traces_hdu = fits.open(master_trace)
@@ -134,25 +143,39 @@ if __name__ == "__main__":
                     continue
                 unbiased_centers_hdu = fits.open(unbiased_path)
                 unbiased_centers = unbiased_centers_hdu['TRACE'].data['centers']
+                if unbiased_centers.shape[0] < 100:
+                    continue
                 residuals = unbiased_centers - trace_centers
                 errors = unbiased_centers_hdu['TRACE'].data['errors']
-
-                for order in orders:
-                    if avg_locations.get(str(order)) is None:
-                        avg_locations[str(order)] = []
-                        avg_locations_err[str(order)] = []
-                    avg_locations[str(order)].append(np.nanmean(unbiased_centers[order][low:high]))
+                index_of_reference_order = get_index_of_reference_order(order_ref_xyi, trace_centers)
+                true_order_delta = index_of_reference_order - order_ref_xyi[2]
+                for arbitrary_order in orders:
+                    order = arbitrary_order + true_order_delta
+                    if avg_locations.get(str(arbitrary_order)) is None:
+                        avg_locations[str(arbitrary_order)] = []
+                        avg_locations_err[str(arbitrary_order)] = []
+                    avg_locations[str(arbitrary_order)].append(np.nanmean(unbiased_centers[order][low:high]))
                     included_points = np.count_nonzero(~np.isnan(errors[order][low:high]))
-                    avg_locations_err[str(order)].append(np.sqrt(np.nansum(errors[order][low:high]**2)/included_points**2))
+                    avg_locations_err[str(arbitrary_order)].append(np.sqrt(np.nansum(errors[order][low:high]**2)/included_points**2))
 
                 times.append(datetime.datetime.strptime(traces_hdu[1].header['DATE-OBS'].split('.')[0],
                                                         '%Y-%m-%dT%H:%M:%S'))
         plt.figure()
         for order in orders:
             plt.errorbar(times, avg_locations[str(order)] - np.mean(avg_locations[str(order)]),
-                         yerr=avg_locations_err[str(order)], marker=',', ls='none')
-        plt.ylabel('Order position - average')
-        plt.xticks(rotation='vertical')
+                         yerr=avg_locations_err[str(order)], marker='o', ls='none',
+                         label='trace {0}'.format(order))
+        font_size = 16
+        font = {'family': 'serif',
+                'size': font_size}
+        plt.rc('font', **font)
+        plt.ylabel('Trace position - time average', fontsize=font_size)
+        plt.xticks(rotation='vertical', fontsize=font_size)
+        plt.xticks(fontsize=font_size)
+        plt.yticks(fontsize=font_size)
+        plt.legend(loc='best')
+        plt.title('Trace stability for {0}'.format(args.site))
+        plt.tight_layout()
         plt.show()
 """
 x = np.arange(residuals.shape[1])
