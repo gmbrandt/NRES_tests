@@ -122,7 +122,7 @@ if __name__ == "__main__":
         avg_locations = {}
         avg_locations_err = {}
         times = []
-        low, high = 1500, 3000
+        low, high = 1000, 3000
         orders = np.arange(23, 26)
         for master_trace in all_master_traces:
             if '110' in master_trace:  # plotting only 110 trace files.
@@ -143,7 +143,7 @@ if __name__ == "__main__":
                         avg_locations_err[str(order)] = []
                     avg_locations[str(order)].append(np.nanmean(unbiased_centers[order][low:high]))
                     included_points = np.count_nonzero(~np.isnan(errors[order][low:high]))
-                    avg_locations_err[str(order)].append(np.sqrt(np.nansum(errors[order][low:high]**2)/included_points))
+                    avg_locations_err[str(order)].append(np.sqrt(np.nansum(errors[order][low:high]**2)/included_points**2))
 
                 times.append(datetime.datetime.strptime(traces_hdu[1].header['DATE-OBS'].split('.')[0],
                                                         '%Y-%m-%dT%H:%M:%S'))
