@@ -181,6 +181,9 @@ if __name__ == "__main__":
         """                                                
         figure for austere trace positions (flux centers)
         """
+        pre = ''
+        if 'idl' in args.archive_base_path:
+            pre = 'idl-'
         plt.figure(figsize=(10, 6))
         for order in orders:
             deviation = np.array(avg_locations[str(order)] - np.mean(avg_locations[str(order)]))
@@ -202,7 +205,7 @@ if __name__ == "__main__":
         #plt.locator_params(axis='x', nbins=10)
         plt.tight_layout()
         if save_figures:
-            plt.savefig(os.path.join(output_dir, 'figures', 'figure_flux_centers{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
+            plt.savefig(os.path.join(output_dir, 'figures', pre + 'figure_flux_centers{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
                         bbox_inches='tight')
 
         """
@@ -232,7 +235,7 @@ if __name__ == "__main__":
         #plt.locator_params(axis='x', nbins=10)
         plt.tight_layout()
         if save_figures:
-            plt.savefig(os.path.join(output_dir, 'figures', 'figure_trace_accuracy{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
+            plt.savefig(os.path.join(output_dir, 'figures', pre + 'figure_trace_accuracy{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
                         bbox_inches='tight')
 
         """
@@ -258,7 +261,7 @@ if __name__ == "__main__":
         plt.tight_layout()
 
         if save_figures:
-            plt.savefig(os.path.join(output_dir, 'figures', 'figure_trace_residuals{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
+            plt.savefig(os.path.join(output_dir, 'figures', pre + 'figure_trace_residuals{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
                         bbox_inches='tight')
         if not save_figures:
             plt.show()
