@@ -74,7 +74,39 @@ def get_index_of_reference_order(reference_xyi, trace_centers):
     return np.argmin(np.abs(trace_y_values_at_refx - reference_xyi[1]))
 
 
+def extract_date_idl_filename(filepath):
+    filename = os.path.basename(filepath)
+    filename_no_ext = filename.split('.fits')[0]
+    date_string = filename_no_ext.split('_')[-1]
+    return date_string
+
+
+def extract_date_banzai_filename(filepath):
+    filename = os.path.basename(filepath)
+    filename_no_ext = filename.split('.fits')[0]
+    date_string = filename_no_ext.split('-')[2]
+    return date_string
+
+
+def extract_date_filename(filepath):
+    if 'idl' in filepath:
+        return extract_date_idl_filename(filepath)
+    return extract_date_banzai_filename(filepath)
+
+
 if __name__ == "__main__":
+    """
+    commands to plot IDL data:
+    ./unbiased_trace_center_estimator.py --site cpt 
+    --output-base-path /home/mbrandt/nres_tests/trace_flux_centering_20190325/ 
+    --plot --archive-base-path /archive/engineering
+    --orders-to-plot 40,41 --sigmas 10 --save
+    
+    commands to reduce data:
+    ./unbiased_trace_center_estimator.py --site tlv 
+    --output-base-path /tmp/trace_flux_centering_20190325 --calculate
+    --archive-base-path /archive/engineering
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('--site',
                         choices=['tlv', 'elp', 'lsc', 'cpt'],
@@ -148,18 +180,27 @@ if __name__ == "__main__":
         orders = np.array(args.orders_to_plot.split(',')).astype(np.int)
         for master_trace in all_master_traces:
             if '110' in master_trace:  # plotting only 110 trace files.
+                print('comparing {0}'.format(master_trace))
                 traces_hdu = fits.open(master_trace)
                 trace_centers = traces_hdu['TRACE'].data['centers']
-                unbiased_path = os.path.join(output_dir,
-                                             os.path.basename(master_trace).replace('trace', 'unbiased-trace'))
+                filename_date = extract_date_filename(master_trace)
+                camera = traces_hdu[1].header['INSTRUME']
+                unbiased_filename = '{site}{instrument}-{camera}-{date}-' \
+                                    'unbiased-trace-bin1x1-110.fits.fz'.format(site=site,
+                                                                               instrument=instrument.replace('nres', 'nrs'),
+                                                                               camera=camera,
+                                                                               date=filename_date)
+                unbiased_path = os.path.join(output_dir, unbiased_filename)
                 if not os.path.exists(unbiased_path):
+                    print('aborting, unbiased centers do not exist')
                     continue
                 unbiased_centers_hdu = fits.open(unbiased_path)
                 unbiased_centers = unbiased_centers_hdu['TRACE'].data['centers']
                 if unbiased_centers.shape[0] < 100:
+                    print('aborting, too few unbiased centers')
                     continue
 
-                residuals_over_time.append(unbiased_centers - trace_centers)
+                residuals_over_time.append(unbiased_centers[:len(trace_centers)] - trace_centers)
                 errors = unbiased_centers_hdu['TRACE'].data['errors']
                 errors_over_time.append(errors)
                 index_of_reference_order = get_index_of_reference_order(order_ref_xyi, trace_centers)
@@ -181,9 +222,9 @@ if __name__ == "__main__":
         """                                                
         figure for austere trace positions (flux centers)
         """
-        pre = ''
+        pre = 'Banzai-NRES'
         if 'idl' in args.archive_base_path:
-            pre = 'idl-'
+            pre = 'idl'
         plt.figure(figsize=(10, 6))
         for order in orders:
             deviation = np.array(avg_locations[str(order)] - np.mean(avg_locations[str(order)]))
@@ -205,7 +246,7 @@ if __name__ == "__main__":
         #plt.locator_params(axis='x', nbins=10)
         plt.tight_layout()
         if save_figures:
-            plt.savefig(os.path.join(output_dir, 'figures', pre + 'figure_flux_centers{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
+            plt.savefig(os.path.join(output_dir, 'figures', pre + '-figure_flux_centers{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
                         bbox_inches='tight')
 
         """
@@ -220,7 +261,7 @@ if __name__ == "__main__":
                          yerr=sigmas * np.array(avg_locations_err[str(order)])[mask], marker='o', ls='none',
                          label='Trace {0} flux center'.format(order))
             plt.plot(times, avg_locations_algorithm[str(order)] - np.mean(avg_locations_algorithm[str(order)]),
-                     '--', label='Trace {0} Banzai-NRES'.format(order))
+                     '--', label='Trace {0} {1}'.format(order, pre))
 
         font_size = 16
         font = {'family': 'serif',
@@ -235,7 +276,7 @@ if __name__ == "__main__":
         #plt.locator_params(axis='x', nbins=10)
         plt.tight_layout()
         if save_figures:
-            plt.savefig(os.path.join(output_dir, 'figures', pre + 'figure_trace_accuracy{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
+            plt.savefig(os.path.join(output_dir, 'figures', pre + '-figure_trace_accuracy{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
                         bbox_inches='tight')
 
         """
@@ -251,7 +292,7 @@ if __name__ == "__main__":
                     label=datetime.datetime.strftime(times[tidx2], '%Y%m%d'))
         ax.set_xlabel('Pixel')
         ax.axhline(y=0, color='k')
-        ax.set_title('Banzai-NRES trace residuals \n Trace ID: {0}'.format(orders[0]))
+        ax.set_title('{0} trace residuals \n Trace ID: {1}'.format(pre, orders[0]))
         ax.set_ylabel(r'$\Delta$ Pixel')
         plt.legend(loc='best')
         font_size = 16
@@ -261,7 +302,7 @@ if __name__ == "__main__":
         plt.tight_layout()
 
         if save_figures:
-            plt.savefig(os.path.join(output_dir, 'figures', pre + 'figure_trace_residuals{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
+            plt.savefig(os.path.join(output_dir, 'figures', pre + '-figure_trace_residuals{0}.pdf'.format(args.orders_to_plot.replace(',', '-'))),
                         bbox_inches='tight')
         if not save_figures:
             plt.show()
