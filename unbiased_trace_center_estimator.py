@@ -88,8 +88,17 @@ if __name__ == "__main__":
                         help='archive data path, e.g. /archive/engineering/')
     parser.add_argument('--orders-to-plot',
                         help='orders to plot e.g. 23,24,25')
+    parser.add_argument('--sigmas',
+                        help='number of sigmas to display on error bars')
+    parser.add_argument('--save',
+                        help='save figures', action="store_true")
     args = parser.parse_args()
+    save_figures = args.save
     site = args.site
+    sigmas = args.sigmas
+    if sigmas is None:
+        sigmas = 1
+    sigmas = int(sigmas)
     output_dir = os.path.join(args.output_base_path, '{0}/'.format(site))
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -127,8 +136,11 @@ if __name__ == "__main__":
 
     if args.plot:
         avg_locations = {}
+        avg_locations_algorithm = {}
         avg_locations_err = {}
         true_order_delta = []
+        residuals_over_time = []
+        errors_over_time = []
         times = []
         order_ref_xyi = (2087, 4024, 134)
         low, high = 1000, 3000
@@ -145,26 +157,37 @@ if __name__ == "__main__":
                 unbiased_centers = unbiased_centers_hdu['TRACE'].data['centers']
                 if unbiased_centers.shape[0] < 100:
                     continue
-                residuals = unbiased_centers - trace_centers
+
+                residuals_over_time.append(unbiased_centers - trace_centers)
                 errors = unbiased_centers_hdu['TRACE'].data['errors']
+                errors_over_time.append(errors)
                 index_of_reference_order = get_index_of_reference_order(order_ref_xyi, trace_centers)
                 true_order_delta = index_of_reference_order - order_ref_xyi[2]
                 for arbitrary_order in orders:
                     order = arbitrary_order + true_order_delta
                     if avg_locations.get(str(arbitrary_order)) is None:
                         avg_locations[str(arbitrary_order)] = []
+                        avg_locations_algorithm[str(arbitrary_order)] = []
                         avg_locations_err[str(arbitrary_order)] = []
                     avg_locations[str(arbitrary_order)].append(np.nanmean(unbiased_centers[order][low:high]))
+                    avg_locations_algorithm[str(arbitrary_order)].append(np.nanmean(trace_centers[order][low:high]))
                     included_points = np.count_nonzero(~np.isnan(errors[order][low:high]))
                     avg_locations_err[str(arbitrary_order)].append(np.sqrt(np.nansum(errors[order][low:high]**2)/included_points**2))
 
                 times.append(datetime.datetime.strptime(traces_hdu[1].header['DATE-OBS'].split('.')[0],
                                                         '%Y-%m-%dT%H:%M:%S'))
-        plt.figure()
+
+        """                                                
+        figure for austere trace positions (flux centers)
+        """
+        plt.figure(figsize=(10, 6))
         for order in orders:
-            plt.errorbar(times, avg_locations[str(order)] - np.mean(avg_locations[str(order)]),
-                         yerr=avg_locations_err[str(order)], marker='o', ls='none',
-                         label='trace {0}'.format(order))
+            deviation = np.array(avg_locations[str(order)] - np.mean(avg_locations[str(order)]))
+            mask = (deviation < 4)
+            deviation = np.array(avg_locations[str(order)] - np.mean(np.array(avg_locations[str(order)])[mask]))
+            plt.errorbar(np.array(times)[mask], deviation[mask],
+                         yerr=sigmas * np.array(avg_locations_err[str(order)])[mask], marker='o', ls='none',
+                         label='Trace {0}'.format(order))
         font_size = 16
         font = {'family': 'serif',
                 'size': font_size}
@@ -175,8 +198,66 @@ if __name__ == "__main__":
         plt.yticks(fontsize=font_size)
         plt.legend(loc='best')
         plt.title('Trace stability for {0}'.format(args.site))
+        #plt.locator_params(axis='x', nbins=10)
         plt.tight_layout()
-        plt.show()
+        if save_figures:
+            plt.savefig(os.path.join(output_dir, 'figure_flux_centers.pdf'), bbox_inches='tight')
+
+        """
+        figure showing trace estimates from banzai-nres following the real positions closely.
+        """
+        plt.figure(figsize=(10, 6))
+        for order in [orders[0]]:
+            deviation = np.array(avg_locations[str(order)] - np.mean(avg_locations[str(order)]))
+            mask = (deviation < 4)
+            deviation = np.array(avg_locations[str(order)] - np.mean(np.array(avg_locations[str(order)])[mask]))
+            plt.errorbar(np.array(times)[mask], deviation[mask],
+                         yerr=sigmas * np.array(avg_locations_err[str(order)])[mask], marker='o', ls='none',
+                         label='Trace {0} flux center'.format(order))
+            plt.plot(times, avg_locations_algorithm[str(order)] - np.mean(avg_locations_algorithm[str(order)]),
+                     '--', label='Trace {0} Banzai-NRES'.format(order))
+
+        font_size = 16
+        font = {'family': 'serif',
+                'size': font_size}
+        plt.rc('font', **font)
+        plt.ylabel('Trace position - time average', fontsize=font_size)
+        plt.xticks(rotation='vertical', fontsize=font_size)
+        plt.xticks(fontsize=font_size)
+        plt.yticks(fontsize=font_size)
+        plt.legend(loc='best')
+        plt.title('Algorithm performance for {0}'.format(args.site))
+        #plt.locator_params(axis='x', nbins=10)
+        plt.tight_layout()
+        if save_figures:
+            plt.savefig(os.path.join(output_dir, 'figure_trace_accuracy.pdf'), bbox_inches='tight')
+
+        """
+        figure showing trace estimates from banzai-nres following the real positions closely.
+        """
+        fig, ax = plt.subplots()
+        tidx1, tidx2 = 0, 20
+        # residuals is a list of 2d arrays of residuals
+        x = np.arange(residuals_over_time[tidx1].shape[1])
+        ax.errorbar(x, residuals_over_time[tidx1][30], yerr=errors_over_time[tidx1][30],
+                    label=datetime.datetime.strftime(times[tidx1], '%Y%m%d'))
+        ax.errorbar(x, residuals_over_time[tidx2][30], yerr=errors_over_time[tidx2][30],
+                    label=datetime.datetime.strftime(times[tidx2], '%Y%m%d'))
+        ax.set_xlabel('Pixel')
+        ax.axhline(y=0, color='k')
+        ax.set_title('Banzai-NRES trace residuals \n Trace ID: {0}'.format(orders[0]))
+        ax.set_ylabel(r'$\Delta$ Pixel')
+        plt.legend(loc='best')
+        font_size = 16
+        font = {'family': 'serif',
+                'size': font_size}
+        plt.rc('font', **font)
+        plt.tight_layout()
+
+        if save_figures:
+            plt.savefig(os.path.join(output_dir, 'figure_trace_residuals.pdf'), bbox_inches='tight')
+        if not save_figures:
+            plt.show()
 """
 x = np.arange(residuals.shape[1])
 i = 0
